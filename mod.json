@@ -5,7 +5,7 @@
   },
   "id": "stepanuke.earlyclickoverdrive",
   "name": "Early Click Buffer: OVERDRIVE",
-  "version": "v0.1.0",
+  "version": "v0.1.1",
   "developer": "Stepanuke",
   "description": "Android port in progress based on Input Buffer by Lyophi. Predictive input buffering for Geometry Dash.",
   "settings": {

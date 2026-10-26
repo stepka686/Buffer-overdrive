@@ -1,0 +1,31 @@
+name: Build Android mod
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Android arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Android64 mod
+        uses: geode-sdk/build-geode-mod@main
+        id: build
+        with:
+          target: Android64
+          sdk: v5.11.2
+          combine: false
+          bindings-ref: 1605f500d053f8de122bf5c7dc6d17c24866e02e
+          configure-args: -DSKIP_BUILDING_CODEGEN=OFF
+
+      - name: Upload .geode artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EarlyClickOverdrive-Android64
+          path: ${{ steps.build.outputs.build-output }}/*.geode
+          if-no-files-found: error

@@ -1895,7 +1895,10 @@ class $modify(BufferLayer, GJBaseGameLayer) {
     void handleButton(bool down, int button, bool isPlayer1) {
         auto f = m_fields.operator->();
         syncState();
-
+log::info(
+    "[ECO-TRACE] handleButton called: button={}, down={}, player1={}",
+    button, down, isPlayer1
+);
         // Trace every jump input reaching this hook, even with Debug Logging off.
         if (button == 1) {
             log::info("[ECO-TRACE] handleButton {} button={} isPlayer1={} inLevel={} step={} p1={} p2={}",

@@ -1632,9 +1632,43 @@ class $modify(BufferLayer, GJBaseGameLayer) {
         return m_gameState.m_isDualMode && m_levelSettings && !m_levelSettings->m_twoPlayerMode;
     }
 
-    // Press or release for one icon. In a dual section each icon has its own
-    // state and decides for itself, so nothing is mirrored here.
+    // Deliver a synthetic input. When SIP is loaded, insert the command into
+    // Geometry Dash's native queued-button list so SIP can assign its sub-tick
+    // timing and apply its normal velocity/displacement correction. Do not use
+    // SIP's get/set queue bridge here: setInputQueueWithRatios clears the whole
+    // queue and can rewrite timestamps of inputs outside the current tick.
+    // In one-player dual mode the two icons may intentionally receive different
+    // decisions, which a single shared queued input cannot represent; retain
+    // the original per-icon path for that experimental case.
     void sendInput(PlayerObject* p, bool down) {
+        if (!p) return;
+
+        auto* playLayer = PlayLayer::get();
+        bool canQueueForSIP = playLayer &&
+            Loader::get()->isModLoaded("chizz.superb-input-precision") &&
+            !sharedDualInput();
+
+        if (canQueueForSIP) {
+            PlayerButtonCommand command;
+            command.m_button = PlayerButton::Jump;
+            command.m_isPush = down;
+            command.m_isPlayer2 = (p == m_player2) &&
+                m_levelSettings && m_levelSettings->m_twoPlayerMode;
+            command.m_step = playLayer->m_currentStep;
+            // This send occurs from OVERDRIVE's scheduled step, often after
+            // the current queue-processing pass. SIP will consume it on the
+            // next pass and clamp/quantize the timestamp using its own rules.
+            command.m_timestamp = playLayer->m_timestamp;
+
+            auto& queue = playLayer->m_queuedButtons;
+            queue.push_back(command);
+            std::stable_sort(queue.begin(), queue.end(), [](auto const& a, auto const& b) {
+                return a.m_timestamp < b.m_timestamp;
+            });
+            return;
+        }
+
+        // Vanilla fallback and the per-icon shared-dual special case.
         if (down) p->pushButton(PlayerButton::Jump);
         else p->releaseButton(PlayerButton::Jump);
     }

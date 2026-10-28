@@ -76,6 +76,12 @@ static PlayerObject* g_lastDestroyedPlayer = nullptr;
 
 #define DBG(...) do { if (g_debug) log::info(__VA_ARGS__); } while (0)
 
+static void requestStateReset(char const* source) {
+    int previous = g_resetEpoch;
+    ++g_resetEpoch;
+    DBG("[InputBuffer] reset requested: source={} epoch={}->{}", source, previous, g_resetEpoch);
+}
+
 static int indexOf(char const* const* names, int n, std::string const& v, int def) {
     for (int i = 0; i < n; i++) if (v == names[i]) return i;
     return def;
@@ -1540,19 +1546,19 @@ class $modify(BufferReset, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
         g_lastDestroyedPlayer = nullptr;
-        g_resetEpoch++;
+        requestStateReset("resetLevel");
     }
 
     void resetLevelFromStart() {
         PlayLayer::resetLevelFromStart();
         g_lastDestroyedPlayer = nullptr;
-        g_resetEpoch++;
+        requestStateReset("resetLevelFromStart");
     }
 
     void loadFromCheckpoint(CheckpointObject* object) {
         PlayLayer::loadFromCheckpoint(object);
         g_lastDestroyedPlayer = nullptr;
-        g_resetEpoch++;
+        requestStateReset("loadFromCheckpoint");
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* object) {
@@ -1563,7 +1569,7 @@ class $modify(BufferReset, PlayLayer) {
         // always reset independently.
         if (player && player == g_lastDestroyedPlayer) return;
         g_lastDestroyedPlayer = player;
-        g_resetEpoch++;
+        requestStateReset("destroyPlayer");
         g_lastDeathPct = this->getCurrentPercent();
     }
 
@@ -1576,7 +1582,7 @@ class $modify(BufferReset, PlayLayer) {
         if (tok == g_secToken) return;
         g_secToken = tok;
         applyToken(tok, levelKeyFor(m_level));
-        g_resetEpoch++; // start the new section with clean input state
+        requestStateReset("section-change"); // start the new section with clean input state
         DBG("[InputBuffer] Section -> {}", tok);
     }
 
@@ -1713,7 +1719,9 @@ class $modify(BufferLayer, GJBaseGameLayer) {
     void syncState() {
         auto f = m_fields.operator->();
         if (f->epoch == g_resetEpoch) return;
+        int previousEpoch = f->epoch;
         f->epoch = g_resetEpoch;
+        DBG("[InputBuffer] syncState applying reset: localEpoch={}->{} step={}", previousEpoch, f->epoch, f->step);
 
         bool inconsistent = false;
         for (auto& s : f->ps) {

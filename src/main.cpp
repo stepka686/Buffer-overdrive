@@ -1487,8 +1487,10 @@ $on_mod(Loaded) {
         listenForSettingChanges<std::string>(key, [](std::string) { loadSettings(); });
     }
 
-    log::info("[ECO-TRACE] Early Click Buffer: OVERDRIVE loaded. Main: {}, TPS: {}, wave: {}, dual: {}. Diagnostic input tracing is ON.",
-              STAGE_NAMES[g_stage], g_tps, waveModeName(), g_dualEnabled ? "ON" : "OFF");
+    if (Mod::get()->getSettingValue<bool>("debug")) {
+        log::info("[ECO-TRACE] Early Click Buffer: OVERDRIVE loaded. Main: {}, TPS: {}, wave: {}, dual: {}. Diagnostic input tracing is ON.",
+                  STAGE_NAMES[g_stage], g_tps, waveModeName(), g_dualEnabled ? "ON" : "OFF");
+    }
 }
 
 $on_game(Loaded) {
@@ -1811,11 +1813,11 @@ class $modify(BufferLayer, GJBaseGameLayer) {
         int step = m_fields->step;
         char const* tag = idx == 0 ? "P1" : "P2";
 
-        // Temporary Android diagnostic: this is intentionally unconditional so
-        // it still works if the user's saved Debug Logging setting is OFF.
-        log::info("[ECO-TRACE] inputPlayer {} {} {} step={} ground={} rings={} window={} pending={} held={}",
-            tag, modeName(p), down ? "PRESS" : "RELEASE", step,
-            p->m_isOnGround, ringsTouching(p), modeLimitSteps(p), s.pending, s.held);
+        if (Mod::get()->getSettingValue<bool>("debug")) {
+            log::info("[ECO-TRACE] inputPlayer {} {} {} step={} ground={} rings={} window={} pending={} held={}",
+                tag, modeName(p), down ? "PRESS" : "RELEASE", step,
+                p->m_isOnGround, ringsTouching(p), modeLimitSteps(p), s.pending, s.held);
+        }
 
         if (!isFlyMode(p) && !s.waveQueue.empty()) {
             flushWaveQueue(p, s, idx);
@@ -1893,12 +1895,16 @@ class $modify(BufferLayer, GJBaseGameLayer) {
                 s.pending = true;
                 s.pendingStart = step;
                 s.lastRingCount = 0;
-                log::info("[ECO-TRACE] queued early press {} mode={} step={} window={}",
-                    tag, modeName(p), step, modeLimitSteps(p));
+                if (Mod::get()->getSettingValue<bool>("debug")) {
+                    log::info("[ECO-TRACE] queued early press {} mode={} step={} window={}",
+                        tag, modeName(p), step, modeLimitSteps(p));
+                }
             } else {
                 s.pending = false;
-                log::info("[ECO-TRACE] NOT queued {} early={} window={} ground={} rings={}",
-                    tag, early, modeLimitSteps(p), p->m_isOnGround, ringsTouching(p));
+                if (Mod::get()->getSettingValue<bool>("debug")) {
+                    log::info("[ECO-TRACE] NOT queued {} early={} window={} ground={} rings={}",
+                        tag, early, modeLimitSteps(p), p->m_isOnGround, ringsTouching(p));
+                }
             }
         }
         return false;
@@ -1929,12 +1935,13 @@ class $modify(BufferLayer, GJBaseGameLayer) {
     void handleButton(bool down, int button, bool isPlayer1) {
         auto f = m_fields.operator->();
         syncState();
-log::info(
-    "[ECO-TRACE] handleButton called: button={}, down={}, player1={}",
-    button, down, isPlayer1
-);
-        // Trace every jump input reaching this hook, even with Debug Logging off.
-        if (button == 1) {
+if (Mod::get()->getSettingValue<bool>("debug")) {
+            log::info(
+                "[ECO-TRACE] handleButton called: button={}, down={}, player1={}",
+                button, down, isPlayer1
+            );
+        }
+        if (button == 1 && Mod::get()->getSettingValue<bool>("debug")) {
             log::info("[ECO-TRACE] handleButton {} button={} isPlayer1={} inLevel={} step={} p1={} p2={}",
                 down ? "PRESS" : "RELEASE", button, isPlayer1, PlayLayer::get() != nullptr,
                 f->step, m_player1 ? modeName(m_player1) : "null",

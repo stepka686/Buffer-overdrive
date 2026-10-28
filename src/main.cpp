@@ -70,9 +70,17 @@ static constexpr char const* KEYBIND_SETTINGS[] = {"kb-stage", "kb-tps-up", "kb-
 
 // Raised whenever the level resets (death, restart, checkpoint).
 static int g_resetEpoch = 0;
+// Avoid treating repeated destroyPlayer callbacks for the same player as new deaths.
+static PlayerObject* g_lastDestroyedPlayer = nullptr;
 // ----------------------------------------------------------------------
 
 #define DBG(...) do { if (g_debug) log::info(__VA_ARGS__); } while (0)
+
+static void requestStateReset(char const* source) {
+    int previous = g_resetEpoch;
+    ++g_resetEpoch;
+    DBG("[InputBuffer] reset requested: source={} epoch={}->{}", source, previous, g_resetEpoch);
+}
 
 static int indexOf(char const* const* names, int n, std::string const& v, int def) {
     for (int i = 0; i < n; i++) if (v == names[i]) return i;
@@ -1487,8 +1495,10 @@ $on_mod(Loaded) {
         listenForSettingChanges<std::string>(key, [](std::string) { loadSettings(); });
     }
 
-    log::info("[ECO-TRACE] Early Click Buffer: OVERDRIVE loaded. Main: {}, TPS: {}, wave: {}, dual: {}. Diagnostic input tracing is ON.",
-              STAGE_NAMES[g_stage], g_tps, waveModeName(), g_dualEnabled ? "ON" : "OFF");
+    if (Mod::get()->getSettingValue<bool>("debug")) {
+        log::info("[ECO-TRACE] Early Click Buffer: OVERDRIVE loaded. Main: {}, TPS: {}, wave: {}, dual: {}. Diagnostic input tracing is ON.",
+                  STAGE_NAMES[g_stage], g_tps, waveModeName(), g_dualEnabled ? "ON" : "OFF");
+    }
 }
 
 $on_game(Loaded) {
@@ -1535,22 +1545,31 @@ class $modify(BufferPause, PauseLayer) {
 class $modify(BufferReset, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
-        g_resetEpoch++;
+        g_lastDestroyedPlayer = nullptr;
+        requestStateReset("resetLevel");
     }
 
     void resetLevelFromStart() {
         PlayLayer::resetLevelFromStart();
-        g_resetEpoch++;
+        g_lastDestroyedPlayer = nullptr;
+        requestStateReset("resetLevelFromStart");
     }
 
     void loadFromCheckpoint(CheckpointObject* object) {
         PlayLayer::loadFromCheckpoint(object);
-        g_resetEpoch++;
+        g_lastDestroyedPlayer = nullptr;
+        requestStateReset("loadFromCheckpoint");
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* object) {
         PlayLayer::destroyPlayer(player, object);
-        g_resetEpoch++;
+        // Some game paths may call this hook repeatedly while the same death
+        // is being processed. Only the first callback for this player should
+        // request a buffer-state reset; explicit restart/checkpoint hooks above
+        // always reset independently.
+        if (player && player == g_lastDestroyedPlayer) return;
+        g_lastDestroyedPlayer = player;
+        requestStateReset("destroyPlayer");
         g_lastDeathPct = this->getCurrentPercent();
     }
 
@@ -1563,7 +1582,7 @@ class $modify(BufferReset, PlayLayer) {
         if (tok == g_secToken) return;
         g_secToken = tok;
         applyToken(tok, levelKeyFor(m_level));
-        g_resetEpoch++; // start the new section with clean input state
+        requestStateReset("section-change"); // start the new section with clean input state
         DBG("[InputBuffer] Section -> {}", tok);
     }
 
@@ -1632,9 +1651,43 @@ class $modify(BufferLayer, GJBaseGameLayer) {
         return m_gameState.m_isDualMode && m_levelSettings && !m_levelSettings->m_twoPlayerMode;
     }
 
-    // Press or release for one icon. In a dual section each icon has its own
-    // state and decides for itself, so nothing is mirrored here.
+    // Deliver a synthetic input. When SIP is loaded, insert the command into
+    // Geometry Dash's native queued-button list so SIP can assign its sub-tick
+    // timing and apply its normal velocity/displacement correction. Do not use
+    // SIP's get/set queue bridge here: setInputQueueWithRatios clears the whole
+    // queue and can rewrite timestamps of inputs outside the current tick.
+    // In one-player dual mode the two icons may intentionally receive different
+    // decisions, which a single shared queued input cannot represent; retain
+    // the original per-icon path for that experimental case.
     void sendInput(PlayerObject* p, bool down) {
+        if (!p) return;
+
+        auto* playLayer = PlayLayer::get();
+        bool canQueueForSIP = playLayer &&
+            Loader::get()->isModLoaded("chizz.superb-input-precision") &&
+            !sharedDualInput();
+
+        if (canQueueForSIP) {
+            PlayerButtonCommand command;
+            command.m_button = PlayerButton::Jump;
+            command.m_isPush = down;
+            command.m_isPlayer2 = (p == m_player2) &&
+                m_levelSettings && m_levelSettings->m_twoPlayerMode;
+            command.m_step = playLayer->m_currentStep;
+            // This send occurs from OVERDRIVE's scheduled step, often after
+            // the current queue-processing pass. SIP will consume it on the
+            // next pass and clamp/quantize the timestamp using its own rules.
+            command.m_timestamp = playLayer->m_timestamp;
+
+            auto& queue = playLayer->m_queuedButtons;
+            queue.push_back(command);
+            std::stable_sort(queue.begin(), queue.end(), [](auto const& a, auto const& b) {
+                return a.m_timestamp < b.m_timestamp;
+            });
+            return;
+        }
+
+        // Vanilla fallback and the per-icon shared-dual special case.
         if (down) p->pushButton(PlayerButton::Jump);
         else p->releaseButton(PlayerButton::Jump);
     }
@@ -1666,7 +1719,9 @@ class $modify(BufferLayer, GJBaseGameLayer) {
     void syncState() {
         auto f = m_fields.operator->();
         if (f->epoch == g_resetEpoch) return;
+        int previousEpoch = f->epoch;
         f->epoch = g_resetEpoch;
+        DBG("[InputBuffer] syncState applying reset: localEpoch={}->{} step={}", previousEpoch, f->epoch, f->step);
 
         bool inconsistent = false;
         for (auto& s : f->ps) {
@@ -1777,11 +1832,11 @@ class $modify(BufferLayer, GJBaseGameLayer) {
         int step = m_fields->step;
         char const* tag = idx == 0 ? "P1" : "P2";
 
-        // Temporary Android diagnostic: this is intentionally unconditional so
-        // it still works if the user's saved Debug Logging setting is OFF.
-        log::info("[ECO-TRACE] inputPlayer {} {} {} step={} ground={} rings={} window={} pending={} held={}",
-            tag, modeName(p), down ? "PRESS" : "RELEASE", step,
-            p->m_isOnGround, ringsTouching(p), modeLimitSteps(p), s.pending, s.held);
+        if (Mod::get()->getSettingValue<bool>("debug")) {
+            log::info("[ECO-TRACE] inputPlayer {} {} {} step={} ground={} rings={} window={} pending={} held={}",
+                tag, modeName(p), down ? "PRESS" : "RELEASE", step,
+                p->m_isOnGround, ringsTouching(p), modeLimitSteps(p), s.pending, s.held);
+        }
 
         if (!isFlyMode(p) && !s.waveQueue.empty()) {
             flushWaveQueue(p, s, idx);
@@ -1859,12 +1914,16 @@ class $modify(BufferLayer, GJBaseGameLayer) {
                 s.pending = true;
                 s.pendingStart = step;
                 s.lastRingCount = 0;
-                log::info("[ECO-TRACE] queued early press {} mode={} step={} window={}",
-                    tag, modeName(p), step, modeLimitSteps(p));
+                if (Mod::get()->getSettingValue<bool>("debug")) {
+                    log::info("[ECO-TRACE] queued early press {} mode={} step={} window={}",
+                        tag, modeName(p), step, modeLimitSteps(p));
+                }
             } else {
                 s.pending = false;
-                log::info("[ECO-TRACE] NOT queued {} early={} window={} ground={} rings={}",
-                    tag, early, modeLimitSteps(p), p->m_isOnGround, ringsTouching(p));
+                if (Mod::get()->getSettingValue<bool>("debug")) {
+                    log::info("[ECO-TRACE] NOT queued {} early={} window={} ground={} rings={}",
+                        tag, early, modeLimitSteps(p), p->m_isOnGround, ringsTouching(p));
+                }
             }
         }
         return false;
@@ -1895,12 +1954,13 @@ class $modify(BufferLayer, GJBaseGameLayer) {
     void handleButton(bool down, int button, bool isPlayer1) {
         auto f = m_fields.operator->();
         syncState();
-log::info(
-    "[ECO-TRACE] handleButton called: button={}, down={}, player1={}",
-    button, down, isPlayer1
-);
-        // Trace every jump input reaching this hook, even with Debug Logging off.
-        if (button == 1) {
+if (Mod::get()->getSettingValue<bool>("debug")) {
+            log::info(
+                "[ECO-TRACE] handleButton called: button={}, down={}, player1={}",
+                button, down, isPlayer1
+            );
+        }
+        if (button == 1 && Mod::get()->getSettingValue<bool>("debug")) {
             log::info("[ECO-TRACE] handleButton {} button={} isPlayer1={} inLevel={} step={} p1={} p2={}",
                 down ? "PRESS" : "RELEASE", button, isPlayer1, PlayLayer::get() != nullptr,
                 f->step, m_player1 ? modeName(m_player1) : "null",

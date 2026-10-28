@@ -1,118 +1,94 @@
-# Input Buffer
+# Early Click Buffer: OVERDRIVE
 
-A Geode mod for Geometry Dash 2.2081 (Windows) that makes tight timings easier.
+**An experimental input-buffering mod for Geometry Dash 2.2081 on Android.**
 
-If you click slightly too early, the mod remembers the click and fires it the moment you land or touch an orb. In ship, UFO, swing and wave it makes very quick taps come out consistent.
+Early Click Buffer: OVERDRIVE is a port in progress based on [Input Buffer by Lyophi](https://github.com/Lyoph/GMD-Buffer-Mod). It remembers selected early inputs and can adjust very short taps, helping make difficult timings more consistent.
 
-> **Note:** this is an input assist. Use it for practice and fun, not for leaderboard or submitted runs.
+> [!WARNING]
+> **Android support is still in progress.** The project has not yet been confirmed as a working, tested Android release. Builds and in-game behavior must be verified on the target device and Geometry Dash/Geode version before use.
 
-## What it does
+## Features
 
-| Mode | Behavior |
-|---|---|
-| Cube, Ball, Robot, Spider | Tap a little before landing or touching an orb, let go, and the click fires when you touch the surface or ring. Clicks you are still holding are left to the normal game behavior. |
-| Ship, UFO, Swing | A very short tap is stretched to a minimum length, so fast taps are all the same length. |
-| Wave | Three styles: **Min Hold**, **Min Gap** and **Grid**. See below. |
-| 2 Player | Both icons are buffered with the same rules, each by its own mode. |
-| Dual portal (experimental) | Off by default. When turned on, each icon in a dual section is buffered by its own mode, so mixed modes such as cube + wave work. When off, dual sections use normal game input. |
+- **Early-input buffering:** for supported modes, an early tap can be remembered and sent when the player reaches a landing or orb.
+- **Short-tap handling:** in supported flying modes, very short presses can be adjusted according to the selected style.
+- **Per-mode timing windows:** configure the buffer window separately for different game modes.
+- **Wave timing styles:** choose between Min Hold, Min Gap, and Grid where available.
+- **Dual-mode support:** experimental support for buffering the two icons independently in dual sections.
+- **In-game settings and hotkeys:** adjust timing and inspect debug logs using the mod's settings.
 
-Pads fire on touch in the normal game, so they need no buffering.
+The exact behavior depends on the active mode, timing window, and selected style. Buffering is input assistance; it does not guarantee that a click will be appropriate for every level or timing.
 
-### Wave modes
+## Timing Windows
 
-- **Min Hold:** a very short tap is stretched to at least the window length. Quick taps feel slightly longer than you pressed.
-- **Min Gap:** after you let go, the next press must wait a minimum time. A press that comes too soon is delayed, which can feel like a late click.
-- **Grid:** every press and release waits for the next beat of a fixed timing grid. Most consistent, but adds a small delay to every input.
+Timing windows are measured in game ticks:
 
-Switching wave mode in the middle of a wave section can cause one odd click, so change it while paused.
+| Value | Meaning |
+| --- | --- |
+| `-1` | Use the Main Buffer Window |
+| `0` | Disable buffering for that mode |
+| `1` or higher | Use the specified number of ticks |
 
-## Install
+At 240 ticks per second, one tick is approximately **4.17 ms**.
 
-1. You need Geometry Dash 2.2081 on Windows with the [Geode](https://geode-sdk.org) loader installed.
-2. Download `lyophi.buffermod.geode` from the [Releases](../../releases) page.
-3. Put it in the `geode/mods` folder inside your Geometry Dash folder, then restart the game.
+| Ticks | Approximate time |
+| ---: | ---: |
+| 2 | 8 ms |
+| 4 | 17 ms |
+| 8 | 33 ms |
+| 16 | 67 ms |
+| 32 | 133 ms |
 
-The mod appears as **Input Buffer** in the Geode mod list.
+Smaller windows generally feel stricter. Larger windows are more forgiving, but can trigger inputs earlier or later than intended.
 
-## Settings
+## Wave Timing Styles
 
-Open them from the Geode mod list, or press the **Buffer** button on the pause menu. The **Profiles** button next to it saves and loads sets of settings.
+- **Min Hold** — extends a very short press to at least the configured window.
+- **Min Gap** — enforces a minimum interval between a release and the next press; an early press may be delayed.
+- **Grid** — aligns presses and releases to a fixed timing grid. This can add delay and may make some timings harder or impossible.
 
-- **Main Buffer Window:** the default window (2, 4, 8 or 16 ticks, or Off).
-- **Per-mode windows:** every mode has its own window in ticks. `-1` uses the main window, `0` turns that mode off, and `1` or more is your own value. Wave is capped at 8 ticks when set to `-1`.
-- **Wave Mode:** Min Hold, Min Gap or Grid.
-- **Game Speed (TPS):** type the TPS you actually run (for example the value you set in Mega Hack), any whole number from 1 to 10000. The mod uses it to turn ticks into real time. It does not change your game speed.
-- **Dual Mode Support (Experimental):** off by default. See above.
-- **Hotkeys:** Geode keybind settings. Click a box and press any key or combination, or clear it to turn that hotkey off.
-- **Debug Logging:** prints detailed events to the console.
+Change timing styles while paused when possible, especially during a wave section.
 
-### Profiles
+## Installation
 
-Press **Profiles** on the pause menu to save your current timing settings under a name, load or delete saved ones, and link a profile to the level you are playing. A linked profile is applied automatically when that level loads, so you can keep different settings for different levels.
+There is **no confirmed stable Android release documented yet**.
 
-A profile stores the Main Buffer Window, every per-mode window, the Wave Mode, the Game Speed (TPS) and the Dual Mode setting. It does not store hotkeys or debug logging. Loading a profile changes your current settings. When a level applies its linked profile, your own settings from before are put back when you leave the level (and after a crash, the next time the game starts).
+When a successful Android build is available:
 
-### About ticks
+1. Confirm that your Geometry Dash version and device architecture match the build.
+2. Download the `.geode` package from the repository's [Releases](../../releases) page or a verified build artifact.
+3. Install it using the normal Geode mod installation process for your Android setup.
+4. Restart Geometry Dash and check the Geode mod list for **Early Click Buffer: OVERDRIVE**.
 
-A tick is 1/240 of a second (about 4 ms):
+Do not install an artifact from a failed or incomplete build. If you are testing a development build, expect bugs and back up your data first.
 
-| Ticks | About |
-|---|---|
-| 2 | 8 ms, half a frame at 60 FPS |
-| 4 | 17 ms, 1 frame at 60 FPS |
-| 8 | 33 ms, 2 frames |
-| 16 | 67 ms, 4 frames |
+## Superb Input Precision Compatibility
 
-Smaller windows feel more natural. Larger windows are more forgiving but can fire clicks earlier or later than you meant.
+Compatibility with [Superb Input Precision (SIP)](https://github.com/ch-zzzy/Superb-Input-Precision) is being investigated.
 
-### Default hotkeys
+The current integration approach queues synthetic OVERDRIVE inputs so SIP can process their timing. A remaining concern is preventing an already scheduled synthetic input from being buffered again when SIP dispatches it through the game's input handler.
 
-| Key | Action |
-|---|---|
-| F6 | Cycle the main window |
-| F7 / F8 | TPS up / down |
-| F9 | Toggle debug logging |
-| F10 | Cycle wave mode |
+**Do not assume this interaction is fully resolved or tested yet.**
 
-Hotkeys only act while you are inside a level, and you can rebind them in the settings.
+## Known Limitations
 
-## Known limitations
+- Android compilation and in-game behavior still need to be verified on the intended device and Geode version.
+- Dual-mode support is experimental.
+- The timing window is assistance, not a guarantee that an input will land at the desired moment.
+- Other input-manipulation mods may conflict or affect timing. When diagnosing issues, test with other input mods disabled first.
+- Some level lists or competitions restrict input-assistance mods. Check the relevant rules before submitting a run.
 
-- The mod is built for Windows. Hotkeys use Geode's keybind system, but other platforms are untested.
-- The TPS setting is typed by hand and must be kept in sync with your real TPS.
-- Dual portal support is experimental and off by default. In levels with mixed modes on the two icons, expect some rough edges.
-- Delayed inputs are injected by the mod, so effects that depend on the original input event may not see them at the exact moment.
-- Other input mods (for example Click Between Frames) can interact with this one. If something feels off, test with the other mod disabled.
+## Building from Source
 
-## Building from source
+This project uses Geode and CMake. Install a compatible Geode SDK and toolchain for the target platform, then build using the project's configured workflow.
 
-You need Geode CLI and SDK, CMake, and Visual Studio 2022 with the **Desktop development with C++** workload.
+See [Android port notes](ANDROID_PORT_NOTES.md) and the GitHub Actions workflows for the current build setup.
 
-```
-geode sdk install-binaries
-geode build
-```
+A successful compile alone does not prove the mod works correctly in-game; test the generated package on the matching Android version and architecture.
 
-The packaged `.geode` file is produced in the `build` folder. Releases are built by GitHub Actions from the pinned SDK and bindings version in `.github/workflows`.
+## Credits and License
 
-If a local build fails inside `GeodeBindings`, the bindings repo's `main` branch may be ahead of your SDK version. Pin the bindings to the commit used in the workflow file (`bindings-ref`), point `GEODE_BINDINGS_REPO_PATH` at that checkout, and build with `geode build -- -DSKIP_BUILDING_CODEGEN=OFF`.
+- **Original implementation:** [Input Buffer by Lyophi](https://github.com/Lyoph/GMD-Buffer-Mod).
+- **Modding platform:** [Geode SDK](https://geode-sdk.org).
+- **Subtick timing compatibility work:** [Superb Input Precision](https://github.com/ch-zzzy/Superb-Input-Precision).
 
-## License
-
-MIT, see [LICENSE](LICENSE).
-
-### Level sections (experimental)
-
-Turn on **Level Sections (Experimental)** in the mod settings, then open **Pause > Buffer > Advanced > Sections** inside a level. Each section has its own **start** and **end** percent (two decimals) and its own copy of the settings, which you edit right in the window on three pages: Window (main window, TPS, dual), Modes (ticks per mode) and Styles (wave, ship, UFO, swing). You can also copy a saved profile into a section. Parts of the level that no section covers follow **Empty sections**: the level's linked profile, your normal settings, or buffer off. If sections overlap, the one that starts last wins.
-
-Ways to set a percent: type it, press **Add** (starts at the percent where you last died), or press the **Add Section Here** key (F11 by default) while playing or in practice mode. Sections do not work in platformer levels. Your own settings are restored when you leave the level.
-
-### Simple and advanced settings
-
-The **Buffer** button on the pause menu opens a small window. **Basic** has the Quick setup and your TPS; most people only need this. **Advanced** has the experimental switches and links to Profiles, Sections and the full settings page.
-
-**Experimental timing styles:** ship, UFO and swing can use Min Hold, Min Gap or Grid like the wave. Grid delays clicks to a fixed beat and can make some timings impossible to hit, so leave it off unless you are testing.
-
-Some lists may not accept input-assist mods. Check your list's rules before submitting a completion.
-
-**Copying sections:** the Sections window can copy a level's sections (and its linked profile) to another level ID. This is recommended for moving your setup from a copy of the level to the main level. It is not experimental and works even if the Level Sections setting is off.
+This project retains the upstream **MIT License**. See [LICENSE](LICENSE) for the license text and applicable notices.

@@ -70,6 +70,8 @@ static constexpr char const* KEYBIND_SETTINGS[] = {"kb-stage", "kb-tps-up", "kb-
 
 // Raised whenever the level resets (death, restart, checkpoint).
 static int g_resetEpoch = 0;
+// Avoid treating repeated destroyPlayer callbacks for the same player as new deaths.
+static PlayerObject* g_lastDestroyedPlayer = nullptr;
 // ----------------------------------------------------------------------
 
 #define DBG(...) do { if (g_debug) log::info(__VA_ARGS__); } while (0)
@@ -1537,21 +1539,30 @@ class $modify(BufferPause, PauseLayer) {
 class $modify(BufferReset, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
+        g_lastDestroyedPlayer = nullptr;
         g_resetEpoch++;
     }
 
     void resetLevelFromStart() {
         PlayLayer::resetLevelFromStart();
+        g_lastDestroyedPlayer = nullptr;
         g_resetEpoch++;
     }
 
     void loadFromCheckpoint(CheckpointObject* object) {
         PlayLayer::loadFromCheckpoint(object);
+        g_lastDestroyedPlayer = nullptr;
         g_resetEpoch++;
     }
 
     void destroyPlayer(PlayerObject* player, GameObject* object) {
         PlayLayer::destroyPlayer(player, object);
+        // Some game paths may call this hook repeatedly while the same death
+        // is being processed. Only the first callback for this player should
+        // request a buffer-state reset; explicit restart/checkpoint hooks above
+        // always reset independently.
+        if (player && player == g_lastDestroyedPlayer) return;
+        g_lastDestroyedPlayer = player;
         g_resetEpoch++;
         g_lastDeathPct = this->getCurrentPercent();
     }
